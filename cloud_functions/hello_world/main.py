@@ -4,6 +4,9 @@ import os
 import random
 import sys
 import time
+import cowsay
+
+
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -47,7 +50,7 @@ def parse_float(name, value, default=0.0):
         )
         return default
 
-
+cowsay.cow('Hello World')
 # Retrieve Job-defined env vars
 TASK_INDEX = get_env("CLOUD_RUN_TASK_INDEX", "0")
 TASK_ATTEMPT = get_env("CLOUD_RUN_TASK_ATTEMPT", "0")
