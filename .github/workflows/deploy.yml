@@ -19,14 +19,9 @@ jobs: # Sequence of jobs for this workflow
         service_account: '${{ secrets.WIF_SERVICE_ACCOUNT }}'
     - name: Deploy hello_world_function # Deploy using gcloud functions
       run: |
-        gcloud functions deploy hello_world_function \
-        --region europe-west1 \
-        --source cloud_functions/hello_world \
-        --runtime python39
-
         gcloud run jobs deploy job-quickstart \
         --source cloud_functions/hello_world \
-        --tasks 50 \
+        --tasks 1 \
         --set-env-vars SLEEP_MS=10000 \
         --set-env-vars FAIL_RATE=0.1 \
         --max-retries 5 \
