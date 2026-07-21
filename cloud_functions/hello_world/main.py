@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from pathlib import Path
 import random
 import sys
 import time
@@ -49,6 +50,34 @@ def parse_float(name, value, default=0.0):
             default,
         )
         return default
+
+
+def load_config():
+    """Loads JSON config and prints each key/value setting."""
+    config_file = os.getenv("CONFIG_FILE", "config.json")
+    config_path = Path(__file__).resolve().parent / config_file
+    BASE_LOGGER.info("Loading config from %s", config_path)
+
+    try:
+        with config_path.open("r", encoding="utf-8") as fp:
+            config = json.load(fp)
+    except FileNotFoundError:
+        BASE_LOGGER.warning("Config file not found at %s", config_path)
+        return {}
+    except json.JSONDecodeError as err:
+        BASE_LOGGER.error("Invalid JSON in config file %s: %s", config_path, err)
+        return {}
+
+    if not isinstance(config, dict):
+        BASE_LOGGER.warning("Config content must be a JSON object")
+        return {}
+
+    for key in sorted(config):
+        value = config[key]
+        print(f"CONFIG {key}={value}")
+        BASE_LOGGER.info("Config setting %s=%s", key, value)
+
+    return config
 
 cowsay.cow('Hello World')
 # Retrieve Job-defined env vars
@@ -122,6 +151,8 @@ def random_failure(rate):
 # Start script
 if __name__ == "__main__":
     LOGGER.info("Process started")
+    CONFIG = load_config()
+    LOGGER.info("Loaded %s config settings", len(CONFIG))
     try:
         main(SLEEP_MS, FAIL_RATE)
     except Exception as err:

@@ -1,1 +1,1 @@
-web: python3 main.py
+web: CONFIG_FILE=config.json python3 main.py
