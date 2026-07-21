@@ -10,6 +10,10 @@ on:
 jobs: # Sequence of jobs for this workflow
   deploy: # Name of the job
     runs-on: ubuntu-latest # Specify virtual machine for running the job
+    env:
+      PROJECT_ID: n8ns-468521
+      REGION: europe-west1
+      SOURCE_REPO: cloud-run-source-deploy
     steps: # Sequence of steps for this job
     - name: 'Checkout' # Checkout repo to virtual machine
       uses: 'actions/checkout@v4'
@@ -32,7 +36,26 @@ jobs: # Sequence of jobs for this workflow
     - name: Set up gcloud SDK
       uses: 'google-github-actions/setup-gcloud@v2'
       with:
-        project_id: 'n8ns-468521'
+        project_id: '${{ env.PROJECT_ID }}'
+
+    - name: Ensure Artifact Registry source repository exists
+      run: |
+        if gcloud artifacts repositories describe "$SOURCE_REPO" \
+          --location "$REGION" \
+          --project "$PROJECT_ID" >/dev/null 2>&1; then
+          echo "Artifact Registry repository '$SOURCE_REPO' already exists in $REGION."
+        else
+          echo "Artifact Registry repository '$SOURCE_REPO' not found; attempting to create it."
+          gcloud artifacts repositories create "$SOURCE_REPO" \
+            --repository-format=docker \
+            --location "$REGION" \
+            --description="Cloud Run source deploy repository" \
+            --project "$PROJECT_ID" || {
+              echo "Unable to create Artifact Registry repository."
+              echo "Grant the deploy service account 'roles/artifactregistry.admin' once, or pre-create '$SOURCE_REPO' in $REGION as an administrator."
+              exit 1
+            }
+        fi
 
     - name: Deploy hello_world_function # Deploy using gcloud functions
       run: |
@@ -42,7 +65,5 @@ jobs: # Sequence of jobs for this workflow
         --set-env-vars SLEEP_MS=10000 \
         --set-env-vars FAIL_RATE=0.1 \
         --max-retries 5 \
-        --region  europe-west1 \
-        --project="n8ns-468521"
-
-        
+        --region "$REGION" \
+        --project "$PROJECT_ID"s
