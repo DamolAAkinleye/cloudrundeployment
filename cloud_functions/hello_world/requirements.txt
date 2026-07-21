@@ -1,2 +1,2 @@
 functions-framework==3.*
-../shared/cowsay-6.0-py3-none-any.whl
+./cowsay-6.0-py3-none-any.whl
