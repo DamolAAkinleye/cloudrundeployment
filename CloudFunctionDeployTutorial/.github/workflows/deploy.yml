@@ -1,13 +1,36 @@
-name: Deploy Cloud Function
+name: Deploy to Cloud Functions
 
+permissions:
+  id-token: write
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+jobs: # Sequence of jobs for this workflow
+  deploy: # Name of the job
+    runs-on: ubuntu-latest # Specify virtual machine for running the job
+    steps: # Sequence of steps for this job
+    - name: 'Checkout' # Checkout repo to virtual machine
+      uses: 'actions/checkout@v3'
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: 'Google auth' # Authenticate with GCP
+      id: 'auth'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        workload_identity_provider: '${{ secrets.WIF_PROVIDER }}'
+        service_account: '${{ secrets.WIF_SERVICE_ACCOUNT }}'
+    - name: Deploy hello_world_function # Deploy using gcloud functions
+      run: |
+        gcloud functions deploy hello_world_function \
+        --region europe-west1 \
+        --source cloud_functions/hello_world \
+        --runtime python39
+
+        gcloud run jobs deploy job-quickstart \
+        --source cloud_functions/hello_world \
+        --tasks 50 \
+        --set-env-vars SLEEP_MS=10000 \
+        --set-env-vars FAIL_RATE=0.1 \
+        --max-retries 5 \
+        --region  europe-west1 \
+        --project="n8ns-468521"
+
+        
