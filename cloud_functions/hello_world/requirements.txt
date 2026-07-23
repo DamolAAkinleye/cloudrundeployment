@@ -1,2 +1,4 @@
 functions-framework==3.*
 ./cowsay-6.0-py3-none-any.whl
+google-cloud-storage>=2.10.0
+requests>=2.31.0

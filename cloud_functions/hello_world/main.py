@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -5,7 +6,10 @@ from pathlib import Path
 import random
 import sys
 import time
+
 import cowsay
+import requests
+from google.cloud import storage
 
 
 
@@ -94,12 +98,14 @@ LOGGER = logging.LoggerAdapter(
 
 
 # Define main script
-def main(sleep_ms=0, fail_rate=0):
-    """Program that simulates work using the sleep method and random failures.
+def main(sleep_ms=0, fail_rate=0, config=None):
+    """Program that simulates work using the sleep method and random failures,
+    then extracts Gutendex data to GCS.
 
     Args:
         sleep_ms: number of milliseconds to sleep
         fail_rate: rate of simulated errors
+        config: loaded config dict (must contain 'gcs_bucket')
     """
     start_time = time.time()
     LOGGER.info(
@@ -116,10 +122,64 @@ def main(sleep_ms=0, fail_rate=0):
     time.sleep(sleep_seconds)  # Convert to seconds
 
     # Simulate errors
-    random_failure(parse_float("FAIL_RATE", fail_rate, 0.0))
+
+    # Extract Gutendex books to GCS
+    cfg = config or {}
+    bucket_name = cfg.get("gcs_bucket", "")
+    LOGGER.info("Starting Gutendex extraction to GCS bucket: %s", bucket_name)
+    extract_to_gcs(bucket_name)
 
     duration_ms = int((time.time() - start_time) * 1000)
     LOGGER.info("Completed task successfully in %sms", duration_ms)
+
+
+GUTENDEX_URL = "https://gutendex.com/books"
+
+
+def extract_to_gcs(bucket_name: str, page_limit: int | None = None) -> None:
+    """Fetches all pages from the Gutendex /books API and uploads each page
+    as a newline-delimited JSON file to the specified GCS bucket.
+
+    Args:
+        bucket_name: Name of the destination GCS bucket (from config.json).
+        page_limit: Optional cap on the number of pages to fetch (useful for
+                    testing; pass None to fetch all pages).
+    """
+    if not bucket_name:
+        raise ValueError("gcs_bucket must be set in config.json")
+
+    gcs_client = storage.Client()
+    bucket = gcs_client.bucket(bucket_name)
+    run_ts = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+
+    url: str | None = GUTENDEX_URL
+    page_num = 0
+
+    while url:
+        LOGGER.info("Fetching Gutendex page %s from %s", page_num + 1, url)
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+
+        books = payload.get("results", [])
+        blob_name = f"gutendex/{run_ts}/page_{page_num:05d}.ndjson"
+        ndjson_data = "\n".join(json.dumps(book) for book in books)
+
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(ndjson_data, content_type="application/x-ndjson")
+        LOGGER.info(
+            "Uploaded %s records to gs://%s/%s", len(books), bucket_name, blob_name
+        )
+
+        page_num += 1
+        url = payload.get("next")
+
+        if page_limit is not None and page_num >= page_limit:
+            LOGGER.info("Reached page_limit=%s, stopping extraction.", page_limit)
+            break
+
+    LOGGER.info("Extraction complete: %s page(s) uploaded to gs://%s/gutendex/%s/",
+                page_num, bucket_name, run_ts)
 
 
 def random_failure(rate):
@@ -154,7 +214,7 @@ if __name__ == "__main__":
     CONFIG = load_config()
     LOGGER.info("Loaded %s config settings", len(CONFIG))
     try:
-        main(SLEEP_MS, FAIL_RATE)
+        main(SLEEP_MS, FAIL_RATE, config=CONFIG)
     except Exception as err:
         message = (
             f"Task #{TASK_INDEX}, " + f"Attempt #{TASK_ATTEMPT} failed: {str(err)}"

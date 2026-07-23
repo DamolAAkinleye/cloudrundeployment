@@ -3,5 +3,6 @@
   "environment": "dev",
   "enable_metrics": true,
   "max_batch_size": 25,
-  "retry_backoff_seconds": 2
+  "retry_backoff_seconds": 2,
+  "gcs_bucket": "healthcare-project"
 }
